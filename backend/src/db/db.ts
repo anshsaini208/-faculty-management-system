@@ -101,12 +101,12 @@ function saveJsonDb() {
 function generateMockAttendance(facultyList: Faculty[]): AttendanceRecord[] {
   const records: AttendanceRecord[] = [];
   const today = new Date();
-  
+
   // Seed for past 30 days
   for (let i = 0; i < 30; i++) {
     const currentDate = new Date(today);
     currentDate.setDate(today.getDate() - i);
-    
+
     // Skip weekends for realistic attendance (optional, but let's keep it simple)
     const dayOfWeek = currentDate.getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) continue;
@@ -163,8 +163,13 @@ function generateMockAttendance(facultyList: Faculty[]): AttendanceRecord[] {
 export async function initDb() {
   if (isPg) {
     console.log('Connecting to PostgreSQL database...');
-    pool = new Pool({ connectionString: pgUrl });
-    
+    pool = new Pool({
+      connectionString: pgUrl,
+      ssl: {
+        rejectUnauthorized: false,
+      },
+    });
+
     // Create tables
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -239,7 +244,7 @@ export async function initDb() {
           [fac.email, facultyPassHash, 'faculty']
         );
         const userId = uRes.rows[0].id;
-        
+
         await pool.query(
           `INSERT INTO faculty (faculty_id, employee_id, name, department, designation, skills, email) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [userId, fac.empId, fac.name, fac.dept, fac.desig, fac.skills, fac.email]
@@ -486,7 +491,7 @@ export const db = {
     } else {
       const fIndex = jsonDb.faculty.findIndex(f => f.faculty_id === faculty_id);
       const uIndex = jsonDb.users.findIndex(u => u.id === faculty_id);
-      
+
       if (fIndex !== -1) {
         // Remove attendance for this faculty as well
         jsonDb.attendance = jsonDb.attendance.filter(a => a.faculty_id !== faculty_id);
@@ -519,7 +524,7 @@ export const db = {
     if (isPg) {
       let query = 'SELECT * FROM attendance WHERE faculty_id = $1';
       const params: any[] = [faculty_id];
-      
+
       if (startDate) {
         query += ' AND date >= $2';
         params.push(startDate);
@@ -555,7 +560,7 @@ export const db = {
         await client.query('BEGIN');
         // Delete existing attendance for this faculty and date
         await client.query('DELETE FROM attendance WHERE faculty_id = $1 AND date = $2', [faculty_id, date]);
-        
+
         // Insert new records
         for (const slot of slots) {
           await client.query(
@@ -575,7 +580,7 @@ export const db = {
     } else {
       // Remove old records
       jsonDb.attendance = jsonDb.attendance.filter(a => !(a.faculty_id === faculty_id && a.date === date));
-      
+
       // Add new records
       slots.forEach((slot, idx) => {
         jsonDb.attendance.push({
@@ -587,7 +592,7 @@ export const db = {
           remarks: slot.remarks
         });
       });
-      
+
       saveJsonDb();
       return true;
     }
